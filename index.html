@@ -4,12 +4,13 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Quét QR & Barcode</title>
-  <script src="https://unpkg.com/@zxing/browser@0.0.10/umd/index.min.js"></script>
 
+  <!-- Thư viện ZXing hỗ trợ UMD cho browser -->
+  <script src="https://unpkg.com/@zxing/browser@0.0.10/umd/index.min.js"></script>
 </head>
 <body>
   <main>
-    <video id="video" autoplay playsinline></video>
+    <video id="video" autoplay playsinline style="width: 100%; max-width: 500px;"></video>
     <div>
       <button id="switch">🔄 Đổi camera</button>
     </div>
@@ -17,76 +18,79 @@
   </main>
 
   <script>
-    const video = document.getElementById('video');
-    const switchButton = document.getElementById('switch');
-    const scanResult = document.getElementById('scan-result');
+    window.onload = async function () {
+      const video = document.getElementById('video');
+      const switchButton = document.getElementById('switch');
+      const scanResult = document.getElementById('scan-result');
 
-    let currentStream = null;
-    let videoDevices = [];
-    let currentDeviceIndex = 0;
+      let currentStream = null;
+      let videoDevices = [];
+      let currentDeviceIndex = 0;
 
-    const codeReader = new ZXing.BrowserMultiFormatContinuousReader();
+      const codeReader = new ZXing.BrowserMultiFormatContinuousReader();
 
-    function stopCurrentStream() {
-      if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
-        video.srcObject = null;
+      function stopCurrentStream() {
+        if (currentStream) {
+          currentStream.getTracks().forEach(track => track.stop());
+          video.srcObject = null;
+        }
+        codeReader.reset();
       }
-      codeReader.reset();
-    }
 
-    async function startCameraByDevice(deviceId) {
-      stopCurrentStream();
+      async function startCameraByDevice(deviceId) {
+        stopCurrentStream();
 
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({
-          video: { deviceId: { exact: deviceId } }
-        });
-        video.srcObject = stream;
-        currentStream = stream;
+        try {
+          const stream = await navigator.mediaDevices.getUserMedia({
+            video: { deviceId: { exact: deviceId } }
+          });
+          video.srcObject = stream;
+          currentStream = stream;
 
-        await startBarcodeScanner(deviceId);
+          await startBarcodeScanner(deviceId);
 
+          const devices = await navigator.mediaDevices.enumerateDevices();
+          videoDevices = devices.filter(device => device.kind === 'videoinput');
+          currentDeviceIndex = videoDevices.findIndex(d => d.deviceId === deviceId);
+        } catch (error) {
+          console.error("Không thể mở camera:", error);
+        }
+      }
+
+      async function startDefaultCamera() {
         const devices = await navigator.mediaDevices.enumerateDevices();
         videoDevices = devices.filter(device => device.kind === 'videoinput');
-        currentDeviceIndex = videoDevices.findIndex(d => d.deviceId === deviceId);
-      } catch (error) {
-        console.error("Không thể mở camera:", error);
+
+        let backCamera = videoDevices.find(device => device.label.toLowerCase().includes('back')) || videoDevices[0];
+        if (backCamera) {
+          await startCameraByDevice(backCamera.deviceId);
+        }
       }
-    }
 
-    async function startDefaultCamera() {
-      const devices = await navigator.mediaDevices.enumerateDevices();
-      videoDevices = devices.filter(device => device.kind === 'videoinput');
-
-      let backCamera = videoDevices.find(device => device.label.toLowerCase().includes('back')) || videoDevices[0];
-
-      await startCameraByDevice(backCamera.deviceId);
-    }
-
-    async function startBarcodeScanner(deviceId) {
-      try {
-        await codeReader.decodeFromVideoDevice(deviceId, video, (result, err) => {
-          if (result) {
-            scanResult.textContent = result.text;
-          } else {
-            scanResult.textContent = "Đang quét...";
-          }
-        });
-      } catch (e) {
-        console.error("Lỗi khi khởi động mã quét:", e);
+      async function startBarcodeScanner(deviceId) {
+        try {
+          await codeReader.decodeFromVideoDevice(deviceId, video, (result, err) => {
+            if (result) {
+              scanResult.textContent = result.text;
+            } else {
+              scanResult.textContent = "Đang quét...";
+            }
+          });
+        } catch (e) {
+          console.error("Lỗi khi khởi động mã quét:", e);
+        }
       }
-    }
 
-    // Nút đổi camera
-    switchButton.addEventListener('click', async () => {
-      if (videoDevices.length < 2) return;
-      currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
-      await startCameraByDevice(videoDevices[currentDeviceIndex].deviceId);
-    });
+      // Đổi camera
+      switchButton.addEventListener('click', async () => {
+        if (videoDevices.length < 2) return;
+        currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
+        await startCameraByDevice(videoDevices[currentDeviceIndex].deviceId);
+      });
 
-    // Bắt đầu
-    startDefaultCamera();
+      // Bắt đầu
+      await startDefaultCamera();
+    };
   </script>
 </body>
 </html>
