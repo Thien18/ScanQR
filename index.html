@@ -1,104 +1,91 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Camera + QR</title>
-  <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Quét QR & Barcode</title>
+  <script src="https://cdn.jsdelivr.net/npm/@zxing/browser@latest"></script>
 </head>
 <body>
   <main>
     <video id="video" autoplay playsinline></video>
     <div>
-      <button id="capture">📸 Chụp ảnh</button>
       <button id="switch">🔄 Đổi camera</button>
     </div>
-    <canvas id="canvas" style="display:none;"></canvas>
-    <img id="photo" alt="Ảnh chụp sẽ hiển thị ở đây" />
-    <p><strong>QR Code:</strong> <span id="qr-result">Đang quét...</span></p>
+    <p><strong>Kết quả quét:</strong> <span id="scan-result">Đang quét...</span></p>
   </main>
 
   <script>
     const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const photo = document.getElementById('photo');
-    const captureButton = document.getElementById('capture');
     const switchButton = document.getElementById('switch');
-    const qrResult = document.getElementById('qr-result');
+    const scanResult = document.getElementById('scan-result');
 
     let currentStream = null;
     let videoDevices = [];
     let currentDeviceIndex = 0;
+
+    const codeReader = new ZXing.BrowserMultiFormatContinuousReader();
 
     function stopCurrentStream() {
       if (currentStream) {
         currentStream.getTracks().forEach(track => track.stop());
         video.srcObject = null;
       }
+      codeReader.reset();
     }
 
-    async function startCamera(constraints) {
+    async function startCameraByDevice(deviceId) {
       stopCurrentStream();
+
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: constraints });
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: { deviceId: { exact: deviceId } }
+        });
         video.srcObject = stream;
         currentStream = stream;
 
+        await startBarcodeScanner(deviceId);
+
         const devices = await navigator.mediaDevices.enumerateDevices();
         videoDevices = devices.filter(device => device.kind === 'videoinput');
-
-        const currentTrack = stream.getVideoTracks()[0];
-        const currentDeviceId = currentTrack.getSettings().deviceId;
-        currentDeviceIndex = videoDevices.findIndex(d => d.deviceId === currentDeviceId);
-
-        requestAnimationFrame(scanQRCode); // Bắt đầu quét QR sau khi camera đã sẵn sàng
+        currentDeviceIndex = videoDevices.findIndex(d => d.deviceId === deviceId);
       } catch (error) {
         console.error("Không thể mở camera:", error);
       }
     }
 
-    async function initCamera() {
-      await startCamera({ facingMode: "environment" });
+    async function startDefaultCamera() {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      videoDevices = devices.filter(device => device.kind === 'videoinput');
+
+      let backCamera = videoDevices.find(device => device.label.toLowerCase().includes('back')) || videoDevices[0];
+
+      await startCameraByDevice(backCamera.deviceId);
     }
 
-    captureButton.addEventListener('click', () => {
-      const context = canvas.getContext('2d');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      photo.src = canvas.toDataURL('image/png');
-    });
+    async function startBarcodeScanner(deviceId) {
+      try {
+        await codeReader.decodeFromVideoDevice(deviceId, video, (result, err) => {
+          if (result) {
+            scanResult.textContent = result.text;
+          } else {
+            scanResult.textContent = "Đang quét...";
+          }
+        });
+      } catch (e) {
+        console.error("Lỗi khi khởi động mã quét:", e);
+      }
+    }
 
+    // Nút đổi camera
     switchButton.addEventListener('click', async () => {
       if (videoDevices.length < 2) return;
       currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
-      const nextDeviceId = videoDevices[currentDeviceIndex].deviceId;
-      await startCamera({ deviceId: { exact: nextDeviceId } });
+      await startCameraByDevice(videoDevices[currentDeviceIndex].deviceId);
     });
 
-    function scanQRCode() {
-      if (video.readyState !== video.HAVE_ENOUGH_DATA) {
-        return requestAnimationFrame(scanQRCode);
-      }
-
-      const context = canvas.getContext('2d');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-
-      const code = jsQR(imageData.data, canvas.width, canvas.height);
-
-      if (code) {
-        qrResult.textContent = code.data;
-      } else {
-        qrResult.textContent = 'Không tìm thấy mã QR';
-      }
-
-      requestAnimationFrame(scanQRCode);
-    }
-
-    initCamera();
+    // Bắt đầu
+    startDefaultCamera();
   </script>
 </body>
 </html>
