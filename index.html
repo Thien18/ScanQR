@@ -17,6 +17,7 @@
     <img id="photo" alt="Ảnh chụp sẽ hiển thị ở đây" />
     <p><strong>QR Code:</strong> <span id="qr-result">Đang quét...</span></p>
     <p><strong>Barcode:</strong> <span id="barcode-result">Đang quét...</span></p>
+    <p><strong>Location:</strong> <span id="location-result">Đang lấy vị trí...</span></p>
   </main>
 
   <script>
@@ -124,7 +125,31 @@
         }
       });
     }
+    // Thêm sau đoạn khai báo các phần tử DOM
+    const locationResult = document.getElementById('location-result');
 
+    // Lấy vị trí người dùng
+    function getLocation() {
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (position) => {
+            const { latitude, longitude } = position.coords;
+            locationResult.textContent = `Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(6)}`;
+          },
+          (error) => {
+            locationResult.textContent = `Không lấy được vị trí (${error.message})`;
+          },
+          {
+            enableHighAccuracy: true,
+            timeout: 5000,
+            maximumAge: 0
+          }
+        );
+      } else {
+        locationResult.textContent = 'Trình duyệt không hỗ trợ định vị';
+      }
+    }
+    getLocation();
     initCamera();
   </script>
 </body>
