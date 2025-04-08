@@ -3,7 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Chụp ảnh bằng camera</title>
+  <title>Camera + QR</title>
+  <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
 </head>
 <body>
   <main>
@@ -14,6 +15,7 @@
     </div>
     <canvas id="canvas" style="display:none;"></canvas>
     <img id="photo" alt="Ảnh chụp sẽ hiển thị ở đây" />
+    <p><strong>QR Code:</strong> <span id="qr-result">Đang quét...</span></p>
   </main>
 
   <script>
@@ -22,6 +24,7 @@
     const photo = document.getElementById('photo');
     const captureButton = document.getElementById('capture');
     const switchButton = document.getElementById('switch');
+    const qrResult = document.getElementById('qr-result');
 
     let currentStream = null;
     let videoDevices = [];
@@ -41,26 +44,23 @@
         video.srcObject = stream;
         currentStream = stream;
 
-        // Cập nhật danh sách camera sau khi được cấp quyền
         const devices = await navigator.mediaDevices.enumerateDevices();
         videoDevices = devices.filter(device => device.kind === 'videoinput');
 
-        // Tìm vị trí camera hiện tại trong danh sách
         const currentTrack = stream.getVideoTracks()[0];
         const currentDeviceId = currentTrack.getSettings().deviceId;
         currentDeviceIndex = videoDevices.findIndex(d => d.deviceId === currentDeviceId);
 
+        requestAnimationFrame(scanQRCode); // Bắt đầu quét QR sau khi camera đã sẵn sàng
       } catch (error) {
         console.error("Không thể mở camera:", error);
       }
     }
 
-    // Bắt đầu với camera sau
     async function initCamera() {
       await startCamera({ facingMode: "environment" });
     }
 
-    // Chụp ảnh
     captureButton.addEventListener('click', () => {
       const context = canvas.getContext('2d');
       canvas.width = video.videoWidth;
@@ -69,16 +69,35 @@
       photo.src = canvas.toDataURL('image/png');
     });
 
-    // Đổi camera
     switchButton.addEventListener('click', async () => {
       if (videoDevices.length < 2) return;
-
       currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
       const nextDeviceId = videoDevices[currentDeviceIndex].deviceId;
       await startCamera({ deviceId: { exact: nextDeviceId } });
     });
 
-    // Khởi động
+    function scanQRCode() {
+      if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+        return requestAnimationFrame(scanQRCode);
+      }
+
+      const context = canvas.getContext('2d');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      context.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+
+      const code = jsQR(imageData.data, canvas.width, canvas.height);
+
+      if (code) {
+        qrResult.textContent = code.data;
+      } else {
+        qrResult.textContent = 'Không tìm thấy mã QR';
+      }
+
+      requestAnimationFrame(scanQRCode);
+    }
+
     initCamera();
   </script>
 </body>
