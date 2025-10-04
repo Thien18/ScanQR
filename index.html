@@ -1,157 +1,22 @@
 <!DOCTYPE html>
-<html lang="en">
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Camera + QR + Barcode</title>
-  <script src="https://cdn.jsdelivr.net/npm/jsqr/dist/jsQR.js"></script>
-  <script src="https://unpkg.com/@ericblade/quagga2@1.2.6/dist/quagga.min.js"></script>
-</head>
+<html lang="vi">
 <body>
-  <main>
-    <video id="video" autoplay playsinline></video>
-    <div>
-      <button id="switch">🔄 Đổi camera</button>
-    </div>
-    <canvas id="canvas" style="display:none;"></canvas>
-    <img id="photo" alt="Ảnh chụp sẽ hiển thị ở đây" />
-    <p><strong>QR Code:</strong> <span id="qr-result">Đang quét...</span></p>
-    <p><strong>Barcode:</strong> <span id="barcode-result">Đang quét...</span></p>
-    <p><strong>Location:</strong> <span id="location-result">Đang lấy vị trí...</span></p>
-    <input type="file" id="fileInput4" name="fileInput4" accept="image/*" >
-  </main>
+  <button id="btn">Gọi API</button>
+  <pre id="result"></pre>
 
   <script>
-    const video = document.getElementById('video');
-    const canvas = document.getElementById('canvas');
-    const qrResult = document.getElementById('qr-result');
-    const barcodeResult = document.getElementById('barcode-result');
-    const switchButton = document.getElementById('switch');
-
-    let currentStream = null;
-    let videoDevices = [];
-    let currentDeviceIndex = 0;
-
-    function stopCurrentStream() {
-      if (currentStream) {
-        currentStream.getTracks().forEach(track => track.stop());
-        video.srcObject = null;
-      }
-      Quagga.stop(); // Dừng quét barcode khi đổi camera
-    }
-
-    async function startCamera(constraints) {
-      stopCurrentStream();
+    document.getElementById("btn").onclick = async () => {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: constraints });
-        video.srcObject = stream;
-        currentStream = stream;
-
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        videoDevices = devices.filter(device => device.kind === 'videoinput');
-
-        const currentTrack = stream.getVideoTracks()[0];
-        const currentDeviceId = currentTrack.getSettings().deviceId;
-        currentDeviceIndex = videoDevices.findIndex(d => d.deviceId === currentDeviceId);
-
-        requestAnimationFrame(scanQRCode);
-        initBarcodeScanner(video); // Bắt đầu quét barcode
-      } catch (error) {
-        console.error("Không thể mở camera:", error);
+        const res = await fetch("https://tieunhi.com.vn/home/loading", {
+          method: "GET",
+        });
+        const data = await res.json();
+        document.getElementById("result").textContent = JSON.stringify(data, null, 2);
+      } catch (err) {
+        console.error(err);
+        document.getElementById("result").textContent = err.message;
       }
-    }
-
-    async function initCamera() {
-      await startCamera({ facingMode: "environment" });
-    }
-
-    switchButton.addEventListener('click', async () => {
-      if (videoDevices.length < 2) return;
-      currentDeviceIndex = (currentDeviceIndex + 1) % videoDevices.length;
-      const nextDeviceId = videoDevices[currentDeviceIndex].deviceId;
-      await startCamera({ deviceId: { exact: nextDeviceId } });
-    });
-
-    function scanQRCode() {
-      if (video.readyState !== video.HAVE_ENOUGH_DATA) {
-        return requestAnimationFrame(scanQRCode);
-      }
-
-      const context = canvas.getContext('2d');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      context.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const imageData = context.getImageData(0, 0, canvas.width, canvas.height);
-
-      const code = jsQR(imageData.data, canvas.width, canvas.height);
-
-      if (code) {
-        qrResult.textContent = code.data;
-      } else {
-        qrResult.textContent = 'Không tìm thấy mã QR';
-      }
-
-      requestAnimationFrame(scanQRCode);
-    }
-
-    function initBarcodeScanner(videoElement) {
-      Quagga.init({
-        inputStream: {
-          type: "LiveStream",
-          target: videoElement,
-          constraints: {
-            facingMode: "environment",
-            deviceId: currentStream?.getVideoTracks()[0]?.getSettings()?.deviceId || undefined,
-          }
-        },
-        decoder: {
-          readers: [
-            "ean_reader",
-            "code_128_reader",
-            "code_39_reader"
-          ]
-        },
-        locate: true
-      }, err => {
-        if (err) {
-          console.error("Quagga init error:", err);
-          return;
-        }
-        Quagga.start();
-      });
-
-      Quagga.onDetected(result => {
-        if (result && result.codeResult && result.codeResult.code) {
-          barcodeResult.textContent = result.codeResult.code;
-        }
-      });
-    }
-    // Thêm sau đoạn khai báo các phần tử DOM
-    const locationResult = document.getElementById('location-result');
-
-    // Lấy vị trí người dùng
-    function getLocation() {
-      if ('geolocation' in navigator) {
-        navigator.geolocation.getCurrentPosition(
-          (position) => {
-            const { latitude, longitude } = position.coords;
-            locationResult.textContent = `Lat: ${latitude.toFixed(6)}, Lng: ${longitude.toFixed(6)}`;
-          },
-          (error) => {
-            locationResult.textContent = `Không lấy được vị trí (${error.message})`;
-          },
-          {
-            enableHighAccuracy: true,
-            timeout: 5000,
-            maximumAge: 0
-          }
-        );
-      } else {
-        locationResult.textContent = 'Trình duyệt không hỗ trợ định vị';
-      }
-    }
-    getLocation();
-    initCamera();
+    };
   </script>
 </body>
 </html>
